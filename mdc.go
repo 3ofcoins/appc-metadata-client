@@ -12,14 +12,15 @@ import "github.com/appc/spec/schema"
 
 func usage(rv int) {
 	fmt.Fprintln(os.Stderr, strings.Replace(`Usage:
-    $0 uuid
-    $0 annotation NAME
-    $0 manifest
-    $0 image-id
-    $0 image-manifest
-    $0 app-annotation NAME
-    $0 render PATH|-
-    $0 expand TEMPLATE-STRING`, "$0", os.Args[0], -1))
+    $0 uuid                    -- show pod UUID
+    $0 annotation NAME         -- show pod's annotation
+    $0 manifest                -- show pod manifest JSON
+    $0 image-id                -- show current app image ID
+    $0 image-manifest          -- show current app image manifest JSON
+    $0 app-annotation NAME     -- show current app's annotation
+    $0 render PATH|-           -- render template file or stdin to stdout
+    $0 expand TEMPLATE-STRING  -- render template string to stdout`,
+		"$0", os.Args[0], -1))
 	os.Exit(rv)
 	panic("CAN'T HAPPEN")
 }
@@ -72,10 +73,6 @@ func (mdc *MDClient) Get(path string) []byte {
 	}
 
 	panic("CAN'T HAPPEN")
-}
-
-func (mdc *MDClient) Show(path string) {
-	fmt.Println(string(mdc.Get(path)))
 }
 
 func (mdc *MDClient) UUID() string {
