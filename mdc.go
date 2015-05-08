@@ -18,11 +18,34 @@ func usage(rv int) {
 	panic("CAN'T HAPPEN")
 }
 
-var acMetadataUrl = os.Getenv("AC_METADATA_URL")
-var acAppName = os.Getenv("AC_APP_NAME")
+type MDClient struct {
+	ACMetadataURL, ACAppName         string
+	uuid, appImageID                 string
+	podAnnotations, appAnnotations   map[string]string
+	podManifestJSON, appManifestJSON []byte
+}
 
-func get(path string) []byte {
-	req, err := http.NewRequest("GET", acMetadataUrl+"/acMetadata/v1/"+path, nil)
+func NewMDClient() *MDClient {
+	rv := &MDClient{
+		ACMetadataURL: os.Getenv("AC_METADATA_URL"),
+		ACAppName:     os.Getenv("AC_APP_NAME"),
+	}
+
+	if rv.ACMetadataURL == "" {
+		fmt.Fprintln(os.Stderr, "FATAL: No AC_METADATA_URL environment variable")
+		os.Exit(1)
+	}
+
+	if rv.ACAppName == "" {
+		fmt.Fprintln(os.Stderr, "FATAL: No AC_APP_NAME environment variable")
+		os.Exit(1)
+	}
+
+	return rv
+}
+
+func (mdc *MDClient) Get(path string) []byte {
+	req, err := http.NewRequest("GET", mdc.ACMetadataURL+"/acMetadata/v1/"+path, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -31,6 +54,7 @@ func get(path string) []byte {
 	if resp, err := (&http.Client{}).Do(req); err != nil {
 		panic(err)
 	} else if resp.StatusCode != 200 {
+		fmt.Fprintln(os.Stderr, "\nERROR: GET", path)
 		resp.Write(os.Stderr)
 		os.Exit(1)
 	} else if body, err := ioutil.ReadAll(resp.Body); err != nil {
@@ -42,18 +66,68 @@ func get(path string) []byte {
 	panic("CAN'T HAPPEN")
 }
 
-func show(path string) {
-	fmt.Println(string(get(path)))
+func (mdc *MDClient) Show(path string) {
+	fmt.Println(string(mdc.Get(path)))
+}
+
+func (mdc *MDClient) UUID() string {
+	if mdc.uuid == "" {
+		mdc.uuid = strings.TrimSpace(string(mdc.Get("pod/uuid")))
+	}
+	return mdc.uuid
+}
+
+func (mdc *MDClient) PodAnnotation(name string) string {
+	if mdc.podAnnotations == nil {
+		mdc.podAnnotations = make(map[string]string)
+	}
+
+	if value, found := mdc.podAnnotations[name]; !found {
+		value = string(mdc.Get("pod/annotations/" + name))
+		mdc.podAnnotations[name] = value
+		return value
+	} else {
+		return value
+	}
+}
+
+func (mdc *MDClient) PodManifestJSON() string {
+	if mdc.podManifestJSON == nil {
+		mdc.podManifestJSON = mdc.Get("pod/manifest")
+	}
+	return string(mdc.podManifestJSON)
+}
+
+func (mdc *MDClient) AppImageID() string {
+	if mdc.appImageID == "" {
+		mdc.appImageID = strings.TrimSpace(string(mdc.Get("apps/" + mdc.ACAppName + "/image/id")))
+	}
+	return mdc.appImageID
+}
+
+func (mdc *MDClient) AppManifestJSON() string {
+	if mdc.appManifestJSON == nil {
+		mdc.appManifestJSON = mdc.Get("apps/" + mdc.ACAppName + "/image/manifest")
+	}
+	return string(mdc.appManifestJSON)
+}
+
+func (mdc *MDClient) AppAnnotation(name string) string {
+	if mdc.appAnnotations == nil {
+		mdc.appAnnotations = make(map[string]string)
+	}
+
+	if value, found := mdc.appAnnotations[name]; !found {
+		value = string(mdc.Get("apps/" + mdc.ACAppName + "/annotations/" + name))
+		mdc.appAnnotations[name] = value
+		return value
+	} else {
+		return value
+	}
 }
 
 func main() {
-	if acMetadataUrl == "" {
-		panic("AC_METADATA_URL environment variable unset!")
-	}
-
-	if acAppName == "" {
-		panic("AC_APP_NAME environment variable unset!")
-	}
+	mdc := NewMDClient()
 
 	if len(os.Args) < 2 {
 		usage(0)
@@ -63,23 +137,23 @@ func main() {
 	case "help", "--help", "-help", "-h":
 		usage(0)
 	case "uuid":
-		show("pod/uuid")
+		fmt.Println(mdc.UUID())
 	case "annotation":
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		show("pod/annotations/" + os.Args[2])
+		fmt.Println(mdc.PodAnnotation(os.Args[2]))
 	case "manifest":
-		show("pod/manifest")
+		fmt.Println(mdc.PodManifestJSON())
 	case "image-id":
-		show("apps/" + acAppName + "/image/id")
+		fmt.Println(mdc.AppImageID())
 	case "image-manifest":
-		show("apps/" + acAppName + "/image/manifest")
+		fmt.Println(mdc.AppManifestJSON())
 	case "app-annotation":
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		show("apps/" + acAppName + "/annotations/" + os.Args[2])
+		fmt.Println(mdc.AppAnnotation(os.Args[2]))
 	default:
 		usage(1)
 	}
