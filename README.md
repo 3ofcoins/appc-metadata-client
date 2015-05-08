@@ -84,12 +84,14 @@ following methods are supported:
         }
     }
 
-Testing
+Testing [![Build Status](https://travis-ci.org/3ofcoins/appc-metadata-client.svg?branch=master)](https://travis-ci.org/3ofcoins/appc-metadata-client)
 -------
 
 With BSD Make, run `make test` to run the test suite; otherwise, run:
 
     env GOPATH=`pwd`/vendor go test
+
+Tests are running automatically at [Travis CI](https://travis-ci.org/3ofcoins/appc-metadata-client)
 
 TODO
 ----
