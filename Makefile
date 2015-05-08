@@ -7,6 +7,9 @@ GOPATH=$(.CURDIR)/vendor
 mdc: mdc.go
 	go build -o mdc
 
+test: .PHONY
+	go test
+
 vendor.refetch: .PHONY
 	rm -rf vendor
 	go get -d

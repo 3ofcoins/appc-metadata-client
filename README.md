@@ -84,9 +84,16 @@ following methods are supported:
         }
     }
 
+Testing
+-------
+
+With BSD Make, run `make test` to run the test suite; otherwise, run:
+
+    env GOPATH=`pwd`/vendor go test
+
 TODO
 ----
 
  - [ ] Gracefully handle nonexistent annotations
  - [ ] Implement identity service
- - [ ] A test suite
+ - [ ] Improve the test suite
