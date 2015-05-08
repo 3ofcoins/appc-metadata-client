@@ -20,7 +20,6 @@ func usage(rv int) {
 
 var acMetadataUrl = os.Getenv("AC_METADATA_URL")
 var acAppName = os.Getenv("AC_APP_NAME")
-var httpClient = &http.Client{}
 
 func get(path string) []byte {
 	req, err := http.NewRequest("GET", acMetadataUrl+"/acMetadata/v1/"+path, nil)
@@ -29,7 +28,7 @@ func get(path string) []byte {
 	}
 	req.Header.Add("Metadata-Flavor", "AppContainer")
 
-	if resp, err := httpClient.Do(req); err != nil {
+	if resp, err := (&http.Client{}).Do(req); err != nil {
 		panic(err)
 	} else if resp.StatusCode != 200 {
 		resp.Write(os.Stderr)
