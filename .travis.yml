@@ -1,5 +1,4 @@
 language: go
 go: 1.4.2
 install: true
-script: env|sort && go test
-env: GOPATH="`pwd`/vendor"
+script: env GOPATH="`pwd`/vendor" go test
