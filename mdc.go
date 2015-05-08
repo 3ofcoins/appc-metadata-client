@@ -1,10 +1,14 @@
 package main
 
+import "encoding/json"
 import "fmt"
 import "io/ioutil"
 import "os"
 import "net/http"
 import "strings"
+import "text/template"
+
+import "github.com/appc/spec/schema"
 
 func usage(rv int) {
 	fmt.Fprintln(os.Stderr, strings.Replace(`Usage:
@@ -13,16 +17,20 @@ func usage(rv int) {
     $0 manifest
     $0 image-id
     $0 image-manifest
-    $0 app-annotation NAME`, "$0", os.Args[0], -1))
+    $0 app-annotation NAME
+    $0 render PATH|-
+    $0 expand TEMPLATE-STRING`, "$0", os.Args[0], -1))
 	os.Exit(rv)
 	panic("CAN'T HAPPEN")
 }
 
 type MDClient struct {
-	ACMetadataURL, ACAppName         string
-	uuid, appImageID                 string
-	podAnnotations, appAnnotations   map[string]string
-	podManifestJSON, appManifestJSON []byte
+	ACMetadataURL, ACAppName              string
+	uuid, appImageID                      string
+	podAnnotations, appAnnotations        map[string]string
+	podManifestJSON, appImageManifestJSON []byte
+	podManifest                           *schema.PodManifest
+	appImageManifest                      *schema.ImageManifest
 }
 
 func NewMDClient() *MDClient {
@@ -91,11 +99,25 @@ func (mdc *MDClient) PodAnnotation(name string) string {
 	}
 }
 
-func (mdc *MDClient) PodManifestJSON() string {
+func (mdc *MDClient) podManifestBytes() []byte {
 	if mdc.podManifestJSON == nil {
 		mdc.podManifestJSON = mdc.Get("pod/manifest")
 	}
-	return string(mdc.podManifestJSON)
+	return mdc.podManifestJSON
+}
+
+func (mdc *MDClient) PodManifestJSON() string {
+	return string(mdc.podManifestBytes())
+}
+
+func (mdc *MDClient) PodManifest() *schema.PodManifest {
+	if mdc.podManifest == nil {
+		mdc.podManifest = &schema.PodManifest{}
+		if err := json.Unmarshal(mdc.podManifestBytes(), mdc.podManifest); err != nil {
+			panic(err)
+		}
+	}
+	return mdc.podManifest
 }
 
 func (mdc *MDClient) AppImageID() string {
@@ -105,11 +127,25 @@ func (mdc *MDClient) AppImageID() string {
 	return mdc.appImageID
 }
 
-func (mdc *MDClient) AppManifestJSON() string {
-	if mdc.appManifestJSON == nil {
-		mdc.appManifestJSON = mdc.Get("apps/" + mdc.ACAppName + "/image/manifest")
+func (mdc *MDClient) appImageManifestBytes() []byte {
+	if mdc.appImageManifestJSON == nil {
+		mdc.appImageManifestJSON = mdc.Get("apps/" + mdc.ACAppName + "/image/manifest")
 	}
-	return string(mdc.appManifestJSON)
+	return mdc.appImageManifestJSON
+}
+
+func (mdc *MDClient) AppImageManifestJSON() string {
+	return string(mdc.appImageManifestBytes())
+}
+
+func (mdc *MDClient) AppImageManifest() *schema.ImageManifest {
+	if mdc.appImageManifest == nil {
+		mdc.appImageManifest = &schema.ImageManifest{}
+		if err := json.Unmarshal(mdc.appImageManifestBytes(), mdc.appImageManifest); err != nil {
+			panic(err)
+		}
+	}
+	return mdc.appImageManifest
 }
 
 func (mdc *MDClient) AppAnnotation(name string) string {
@@ -148,12 +184,30 @@ func main() {
 	case "image-id":
 		fmt.Println(mdc.AppImageID())
 	case "image-manifest":
-		fmt.Println(mdc.AppManifestJSON())
+		fmt.Println(mdc.AppImageManifestJSON())
 	case "app-annotation":
 		if len(os.Args) < 3 {
 			usage(1)
 		}
 		fmt.Println(mdc.AppAnnotation(os.Args[2]))
+	case "render":
+		if len(os.Args) < 3 {
+			usage(1)
+		}
+		path := os.Args[2]
+		if path == "-" {
+			path = "/dev/stdin"
+		}
+		if err := template.Must(template.ParseFiles(path)).Execute(os.Stdout, mdc); err != nil {
+			panic(err)
+		}
+	case "expand":
+		if len(os.Args) < 3 {
+			usage(1)
+		}
+		if err := template.Must(template.New("").Parse(os.Args[2])).Execute(os.Stdout, mdc); err != nil {
+			panic(err)
+		}
 	default:
 		usage(1)
 	}
