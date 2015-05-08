@@ -1,5 +1,5 @@
 language: go
-go: tip
+go: 1.4.2
 install: true
 script: go test
 env: GOPATH="`pwd`/vendor"
