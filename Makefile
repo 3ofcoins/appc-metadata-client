@@ -4,8 +4,8 @@ CC=clang
 GOPATH=$(.CURDIR)/vendor
 .export CC GOPATH
 
-mdc: mdc.go
-	go build -o mdc
+ac-mdc: mdc.go
+	go build -o ac-mdc
 
 test: .PHONY
 	go test
@@ -25,4 +25,4 @@ vendor.refetch: .PHONY
             done
 
 clean:
-	rm -rf mdc
+	rm -rf ac-mdc
