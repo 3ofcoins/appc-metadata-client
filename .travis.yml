@@ -8,6 +8,7 @@ env:
   global:
     - GOARCH=amd64
     - GO15VENDOREXPERIMENT=1
+script: go test github.com/3ofcoins/appc-metadata-client
 matrix:
   allow_failures:
     - go: tip
