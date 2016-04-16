@@ -1,6 +1,10 @@
 package main
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+	"text/template"
+)
 import "net/http/httptest"
 import "os"
 import "testing"
@@ -127,8 +131,17 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid pod manifest")
 	}
 
-	if val := mdc.PodAnnotation("ip-address"); val != "10.1.2.3" {
+	val, found := mdc.GetPodAnnotation("ip-address")
+	if !found {
+		t.Error("ip-address pod annotation not found")
+	}
+	if val != "10.1.2.3" {
 		t.Error("Invalid annotation value:", val)
+	}
+
+	_, found = mdc.GetPodAnnotation("whatever")
+	if found {
+		t.Error("whatever pod annotation found")
 	}
 
 	if id := mdc.AppImageID(); id != "sha512-8d3fffddf79e9a232ffd19f9ccaa4d6b37a6a243dbe0f23137b108a043d9da13121a9b505c804956b22e93c7f93969f4a7ba8ddea45bf4aab0bebc8f814e0990" {
@@ -139,7 +152,44 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid pod manifest")
 	}
 
-	if val := mdc.AppAnnotation("foo"); val != "baz" {
+	val, found = mdc.GetAppAnnotation("foo")
+	if !found {
+		t.Error("App annotation foo not found")
+	}
+	if val != "baz" {
 		t.Error("Invalid annotation value:", val)
+	}
+
+	_, found = mdc.GetAppAnnotation("bar")
+	if found {
+		t.Error("Nonexistent app annotation bar found")
+	}
+}
+
+const templateText = `
+I am a {{.ACAppName}}, {{.UUID}}, running {{.AppImageID}}
+My IP address is {{.PodAnnotation "ip-address"}} {{.PodAnnotationOr "ip-address" "0.0.0.0"}}
+My whatever is "{{.PodAnnotation "whatever"}}" "{{.PodAnnotationOr "whatever" "whatevs"}}"
+My "foo" is "{{.AppAnnotation "foo"}}" "{{.AppAnnotationOr "foo" "quux"}}"
+My "bar" is "{{.AppAnnotation "bar"}}" "{{.AppAnnotationOr "bar" "quux"}}"
+`
+
+const templateExpected = `
+I am a reduce-worker, 26E56A04-F590-11E4-A66F-D7B3DD9DA696, running sha512-8d3fffddf79e9a232ffd19f9ccaa4d6b37a6a243dbe0f23137b108a043d9da13121a9b505c804956b22e93c7f93969f4a7ba8ddea45bf4aab0bebc8f814e0990
+My IP address is 10.1.2.3 10.1.2.3
+My whatever is "" "whatevs"
+My "foo" is "baz" "baz"
+My "bar" is "" "quux"
+`
+
+func TestTemplateRendering(t *testing.T) {
+	mdc := NewMDClient()
+	out := &bytes.Buffer{}
+
+	tmpl := template.Must(template.New("appc-metadata-client").Parse(templateText))
+	if err := tmpl.Execute(out, mdc); err != nil {
+		t.Error("Error rendering template:", err)
+	} else if actual := out.String(); actual != templateExpected {
+		t.Error("Rendered template: got %#v, but expected %#v", actual, templateExpected)
 	}
 }

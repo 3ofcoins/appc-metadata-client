@@ -60,11 +60,17 @@ following methods are supported:
  - `{{.ACMetadataURL}}`, `{{.ACAppName}}` – values of environment
    variables `AC_METADATA_URL` and `AC_APP_NAME`
  - `{{.UUID}}` – pod's UUID
- - `{{.PodAnnotation "name"}}` – pod's annotation value
+ - `{{.PodAnnotation "name"}}` – pod's annotation value, empty string if does not exist
+ - `{{.PodAnnotationOr "name" "default"}}` – pod's annotation value, "default" if does not exist
+ - `{{.MustPodAnnotation "name"}}` – pod's annotation value, panics if does not exist
+ - `{{.HasPodAnnotation "name"}}` – true if pod has an annotation of that name
  - `{{.PodManifest}}` – [PodManifest](https://godoc.org/github.com/appc/spec/schema#PodManifest) object
  - `{{.AppImageID}}` – ID of current app's image
  - `{{.AppImageManifest}}` – [ImageManifest](https://godoc.org/github.com/appc/spec/schema#ImageManifest) object for current app's image
- - `{{.AppAnnotation "name"}}` – current app's annotation value
+ - `{{.AppAnnotation "name"}}`,
+   `{{.AppAnnotationOr "name" "default"}}`,
+   `{{.MustAppAnnotation "name"}}`,
+   `{{.HasAppAnnotation "name"}}`– same as `…PodAnnotation…`, but for app annotations
 
 ### Example template
 

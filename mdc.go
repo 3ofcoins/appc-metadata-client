@@ -1,26 +1,29 @@
 package main
 
-import "encoding/json"
-import "fmt"
-import "io/ioutil"
-import "os"
-import "net/http"
-import "strings"
-import "text/template"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/template"
 
-import "github.com/appc/spec/schema"
+	"github.com/appc/spec/schema"
+)
 
 func usage(rv int) {
 	fmt.Fprintln(os.Stderr, strings.Replace(`Usage:
-    $0 uuid                    -- show pod UUID
-    $0 annotation NAME         -- show pod's annotation
-    $0 manifest                -- show pod manifest JSON
-    $0 image-id                -- show current app image ID
-    $0 image-manifest          -- show current app image manifest JSON
-    $0 app-annotation NAME     -- show current app's annotation
-    $0 render PATH|-           -- render template file or stdin to stdout
-    $0 expand TEMPLATE-STRING  -- render template string to stdout`,
-		"$0", os.Args[0], -1))
+    $0 uuid                          -- show pod UUID
+    $0 annotation NAME [DEFAULT]     -- show pod's annotation
+    $0 manifest                      -- show pod manifest JSON
+    $0 image-id                      -- show current app image ID
+    $0 image-manifest                -- show current app image manifest JSON
+    $0 app-annotation NAME [DEFAULT] -- show current app's annotation
+    $0 render PATH|-                 -- render template file or stdin to stdout
+    $0 expand TEMPLATE-STRING        -- render template string to stdout`,
+		"$0", filepath.Base(os.Args[0]), -1))
 	os.Exit(rv)
 	panic("CAN'T HAPPEN")
 }
@@ -28,7 +31,7 @@ func usage(rv int) {
 type MDClient struct {
 	ACMetadataURL, ACAppName              string
 	uuid, appImageID                      string
-	podAnnotations, appAnnotations        map[string]string
+	podAnnotations, appAnnotations        map[string]*string
 	podManifestJSON, appImageManifestJSON []byte
 	podManifest                           *schema.PodManifest
 	appImageManifest                      *schema.ImageManifest
@@ -62,6 +65,8 @@ func (mdc *MDClient) Get(path string) []byte {
 
 	if resp, err := (&http.Client{}).Do(req); err != nil {
 		panic(err)
+	} else if resp.StatusCode == 404 {
+		return nil
 	} else if resp.StatusCode != 200 {
 		fmt.Fprintln(os.Stderr, "\nERROR: GET", path)
 		resp.Write(os.Stderr)
@@ -82,18 +87,51 @@ func (mdc *MDClient) UUID() string {
 	return mdc.uuid
 }
 
-func (mdc *MDClient) PodAnnotation(name string) string {
+func (mdc *MDClient) GetPodAnnotation(name string) (string, bool) {
 	if mdc.podAnnotations == nil {
-		mdc.podAnnotations = make(map[string]string)
+		mdc.podAnnotations = make(map[string]*string)
 	}
 
 	if value, found := mdc.podAnnotations[name]; !found {
-		value = string(mdc.Get("pod/annotations/" + name))
-		mdc.podAnnotations[name] = value
-		return value
+		if vb := mdc.Get("pod/annotations/" + name); vb != nil {
+			v := string(vb)
+			mdc.podAnnotations[name] = &v
+			return v, true
+		} else {
+			mdc.podAnnotations[name] = nil
+			return "", false
+		}
+	} else if value == nil {
+		return "", false
 	} else {
-		return value
+		return *value, true
 	}
+}
+
+func (mdc *MDClient) PodAnnotation(name string) string {
+	v, _ := mdc.GetPodAnnotation(name)
+	return v
+}
+
+func (mdc *MDClient) HasPodAnnotation(name string) bool {
+	_, v := mdc.GetPodAnnotation(name)
+	return v
+}
+
+func (mdc *MDClient) MustPodAnnotation(name string) string {
+	v, found := mdc.GetPodAnnotation(name)
+	if !found {
+		panic("Annotation not found: " + name)
+	}
+	return v
+}
+
+func (mdc *MDClient) PodAnnotationOr(name, defaultValue string) string {
+	v, found := mdc.GetPodAnnotation(name)
+	if !found {
+		return defaultValue
+	}
+	return v
 }
 
 func (mdc *MDClient) podManifestBytes() []byte {
@@ -145,18 +183,51 @@ func (mdc *MDClient) AppImageManifest() *schema.ImageManifest {
 	return mdc.appImageManifest
 }
 
-func (mdc *MDClient) AppAnnotation(name string) string {
+func (mdc *MDClient) GetAppAnnotation(name string) (string, bool) {
 	if mdc.appAnnotations == nil {
-		mdc.appAnnotations = make(map[string]string)
+		mdc.appAnnotations = make(map[string]*string)
 	}
 
 	if value, found := mdc.appAnnotations[name]; !found {
-		value = string(mdc.Get("apps/" + mdc.ACAppName + "/annotations/" + name))
-		mdc.appAnnotations[name] = value
-		return value
+		if vb := mdc.Get("apps/" + mdc.ACAppName + "/annotations/" + name); vb != nil {
+			v := string(vb)
+			mdc.appAnnotations[name] = &v
+			return v, true
+		} else {
+			mdc.appAnnotations[name] = nil
+			return "", false
+		}
+	} else if value == nil {
+		return "", false
 	} else {
-		return value
+		return *value, true
 	}
+}
+
+func (mdc *MDClient) AppAnnotation(name string) string {
+	v, _ := mdc.GetAppAnnotation(name)
+	return v
+}
+
+func (mdc *MDClient) HasAppAnnotation(name string) bool {
+	_, v := mdc.GetAppAnnotation(name)
+	return v
+}
+
+func (mdc *MDClient) MustAppAnnotation(name string) string {
+	v, found := mdc.GetAppAnnotation(name)
+	if !found {
+		panic("Annotation not found: " + name)
+	}
+	return v
+}
+
+func (mdc *MDClient) AppAnnotationOr(name, defaultValue string) string {
+	v, found := mdc.GetAppAnnotation(name)
+	if !found {
+		return defaultValue
+	}
+	return v
 }
 
 func main() {
@@ -175,7 +246,14 @@ func main() {
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		fmt.Println(mdc.PodAnnotation(os.Args[2]))
+		if ann, found := mdc.GetPodAnnotation(os.Args[2]); found {
+			fmt.Println(ann)
+		} else if len(os.Args) > 3 {
+			fmt.Println(os.Args[3])
+		} else {
+			fmt.Fprintf(os.Stderr, "ERROR: No such annotation: %#v\n", os.Args[2])
+			os.Exit(1)
+		}
 	case "manifest":
 		fmt.Println(mdc.PodManifestJSON())
 	case "image-id":
@@ -186,7 +264,14 @@ func main() {
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		fmt.Println(mdc.AppAnnotation(os.Args[2]))
+		if ann, found := mdc.GetAppAnnotation(os.Args[2]); found {
+			fmt.Println(ann)
+		} else if len(os.Args) > 3 {
+			fmt.Println(os.Args[3])
+		} else {
+			fmt.Fprintf(os.Stderr, "ERROR: No such annotation: %#v\n", os.Args[2])
+			os.Exit(1)
+		}
 	case "render":
 		if len(os.Args) < 3 {
 			usage(1)
