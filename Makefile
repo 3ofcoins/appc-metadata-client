@@ -19,22 +19,5 @@ ${.gopath}:
 	rm -rf "${.gopath}"
 	ln -sv ${.CURDIR} ${.gopath}
 
-vendor.refetch: .PHONY
-	rm -rf vendor build
-	${MAKE} ${.gopath}
-	go get -v ${gopkg}
-	mv -v ${.CURDIR}/build/src ${.CURDIR}/vendor
-	rm -rfv vendor/github.com/3ofcoins
-	cd ${.CURDIR}/vendor/github.com/appc/spec && git checkout ${APPC_SPEC_VERSION}
-	set -e ; \
-	    cd ${.CURDIR}/vendor ; \
-	     for d in github.com/*/* ; do \
-	         if test -L $$d ; then \
-	             continue ; \
-	         fi ; \
-	         echo "$$d $$(cd $$d; git log -n 1 --oneline --decorate)" >> $(.CURDIR)/vendor/manifest.txt ; \
-	         rm -rf $$d/.git ; \
-             done
-
 clean:
 	rm -rf ac-mdc build
