@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"net/http"
+	"net/http/httptest"
+	"testing"
 	"text/template"
 )
-import "net/http/httptest"
+
 import "os"
-import "testing"
 
 var pod_uuid = "26E56A04-F590-11E4-A66F-D7B3DD9DA696"
 var pod_manifest = `{
@@ -91,14 +92,19 @@ func serveMetadata(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(pod_uuid))
 	case "/acMetadata/v1/pod/manifest":
 		w.Write([]byte(pod_manifest))
-	case "/acMetadata/v1/pod/annotations/ip-address":
-		w.Write([]byte("10.1.2.3"))
-	case "/acMetadata/v1/apps/reduce-worker/annotations/foo":
-		w.Write([]byte("baz"))
+	case "/acMetadata/v1/pod/annotations":
+		w.Write([]byte(`[{"name": "ip-address", "value": "10.1.2.3"}]`))
 	case "/acMetadata/v1/apps/reduce-worker/image/id":
 		w.Write([]byte("sha512-8d3fffddf79e9a232ffd19f9ccaa4d6b37a6a243dbe0f23137b108a043d9da13121a9b505c804956b22e93c7f93969f4a7ba8ddea45bf4aab0bebc8f814e0990"))
 	case "/acMetadata/v1/apps/reduce-worker/image/manifest":
 		w.Write([]byte(image_manifest))
+	case "/acMetadata/v1/apps/reduce-worker/annotations":
+		w.Write([]byte(`[
+        {"name": "foo", "value": "baz"},
+        {"name": "authors", "value": "Carly Container <carly@example.com>, Nat Network <[nat@example.com](mailto:nat@example.com)>"},
+        {"name": "created", "value": "2014-10-27T19:32:27.67021798Z"},
+        {"name": "documentation", "value": "https://example.com/docs"},
+        {"name": "homepage", "value": "https://example.com"}]`))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -131,7 +137,7 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid pod manifest")
 	}
 
-	val, found := mdc.GetPodAnnotation("ip-address")
+	val, found := mdc.PodAnnotations().Get("ip-address")
 	if !found {
 		t.Error("ip-address pod annotation not found")
 	}
@@ -139,7 +145,7 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid annotation value:", val)
 	}
 
-	_, found = mdc.GetPodAnnotation("whatever")
+	_, found = mdc.PodAnnotations().Get("whatever")
 	if found {
 		t.Error("whatever pod annotation found")
 	}
@@ -152,7 +158,7 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid pod manifest")
 	}
 
-	val, found = mdc.GetAppAnnotation("foo")
+	val, found = mdc.AppAnnotations().Get("foo")
 	if !found {
 		t.Error("App annotation foo not found")
 	}
@@ -160,7 +166,7 @@ func TestMDCApi(t *testing.T) {
 		t.Error("Invalid annotation value:", val)
 	}
 
-	_, found = mdc.GetAppAnnotation("bar")
+	_, found = mdc.AppAnnotations().Get("bar")
 	if found {
 		t.Error("Nonexistent app annotation bar found")
 	}

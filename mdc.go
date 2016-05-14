@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/appc/spec/schema"
+	"github.com/appc/spec/schema/types"
 )
 
 func usage(rv int) {
@@ -31,7 +32,7 @@ func usage(rv int) {
 type MDClient struct {
 	ACMetadataURL, ACAppName              string
 	uuid, appImageID                      string
-	podAnnotations, appAnnotations        map[string]*string
+	podAnnotations, appAnnotations        types.Annotations
 	podManifestJSON, appImageManifestJSON []byte
 	podManifest                           *schema.PodManifest
 	appImageManifest                      *schema.ImageManifest
@@ -87,39 +88,27 @@ func (mdc *MDClient) UUID() string {
 	return mdc.uuid
 }
 
-func (mdc *MDClient) GetPodAnnotation(name string) (string, bool) {
+func (mdc *MDClient) PodAnnotations() types.Annotations {
 	if mdc.podAnnotations == nil {
-		mdc.podAnnotations = make(map[string]*string)
-	}
-
-	if value, found := mdc.podAnnotations[name]; !found {
-		if vb := mdc.Get("pod/annotations/" + name); vb != nil {
-			v := string(vb)
-			mdc.podAnnotations[name] = &v
-			return v, true
-		} else {
-			mdc.podAnnotations[name] = nil
-			return "", false
+		if err := json.Unmarshal(mdc.Get("pod/annotations"), &mdc.podAnnotations); err != nil {
+			panic(err)
 		}
-	} else if value == nil {
-		return "", false
-	} else {
-		return *value, true
 	}
+	return mdc.podAnnotations
 }
 
 func (mdc *MDClient) PodAnnotation(name string) string {
-	v, _ := mdc.GetPodAnnotation(name)
+	v, _ := mdc.PodAnnotations().Get(name)
 	return v
 }
 
 func (mdc *MDClient) HasPodAnnotation(name string) bool {
-	_, v := mdc.GetPodAnnotation(name)
+	_, v := mdc.PodAnnotations().Get(name)
 	return v
 }
 
 func (mdc *MDClient) MustPodAnnotation(name string) string {
-	v, found := mdc.GetPodAnnotation(name)
+	v, found := mdc.PodAnnotations().Get(name)
 	if !found {
 		panic("Annotation not found: " + name)
 	}
@@ -127,7 +116,7 @@ func (mdc *MDClient) MustPodAnnotation(name string) string {
 }
 
 func (mdc *MDClient) PodAnnotationOr(name, defaultValue string) string {
-	v, found := mdc.GetPodAnnotation(name)
+	v, found := mdc.PodAnnotations().Get(name)
 	if !found {
 		return defaultValue
 	}
@@ -183,39 +172,27 @@ func (mdc *MDClient) AppImageManifest() *schema.ImageManifest {
 	return mdc.appImageManifest
 }
 
-func (mdc *MDClient) GetAppAnnotation(name string) (string, bool) {
+func (mdc *MDClient) AppAnnotations() types.Annotations {
 	if mdc.appAnnotations == nil {
-		mdc.appAnnotations = make(map[string]*string)
-	}
-
-	if value, found := mdc.appAnnotations[name]; !found {
-		if vb := mdc.Get("apps/" + mdc.ACAppName + "/annotations/" + name); vb != nil {
-			v := string(vb)
-			mdc.appAnnotations[name] = &v
-			return v, true
-		} else {
-			mdc.appAnnotations[name] = nil
-			return "", false
+		if err := json.Unmarshal(mdc.Get("apps/"+mdc.ACAppName+"/annotations"), &mdc.appAnnotations); err != nil {
+			panic(err)
 		}
-	} else if value == nil {
-		return "", false
-	} else {
-		return *value, true
 	}
+	return mdc.appAnnotations
 }
 
 func (mdc *MDClient) AppAnnotation(name string) string {
-	v, _ := mdc.GetAppAnnotation(name)
+	v, _ := mdc.AppAnnotations().Get(name)
 	return v
 }
 
 func (mdc *MDClient) HasAppAnnotation(name string) bool {
-	_, v := mdc.GetAppAnnotation(name)
+	_, v := mdc.AppAnnotations().Get(name)
 	return v
 }
 
 func (mdc *MDClient) MustAppAnnotation(name string) string {
-	v, found := mdc.GetAppAnnotation(name)
+	v, found := mdc.AppAnnotations().Get(name)
 	if !found {
 		panic("Annotation not found: " + name)
 	}
@@ -223,7 +200,7 @@ func (mdc *MDClient) MustAppAnnotation(name string) string {
 }
 
 func (mdc *MDClient) AppAnnotationOr(name, defaultValue string) string {
-	v, found := mdc.GetAppAnnotation(name)
+	v, found := mdc.AppAnnotations().Get(name)
 	if !found {
 		return defaultValue
 	}
@@ -246,7 +223,7 @@ func main() {
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		if ann, found := mdc.GetPodAnnotation(os.Args[2]); found {
+		if ann, found := mdc.PodAnnotations().Get(os.Args[2]); found {
 			fmt.Println(ann)
 		} else if len(os.Args) > 3 {
 			fmt.Println(os.Args[3])
@@ -264,7 +241,7 @@ func main() {
 		if len(os.Args) < 3 {
 			usage(1)
 		}
-		if ann, found := mdc.GetAppAnnotation(os.Args[2]); found {
+		if ann, found := mdc.AppAnnotations().Get(os.Args[2]); found {
 			fmt.Println(ann)
 		} else if len(os.Args) > 3 {
 			fmt.Println(os.Args[3])
