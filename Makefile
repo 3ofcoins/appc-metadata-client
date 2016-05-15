@@ -8,7 +8,7 @@ gopkg = github.com/3ofcoins/appc-metadata-client
 .gopath = ${GOPATH}/src/${gopkg}
 
 ac-mdc: ${.gopath} mdc.go
-	go build -o ac-mdc  ${gopkg}
+	go build -o ac-mdc${FLAVOUR:D.}${FLAVOUR}  ${gopkg}
 
 test: ${.gopath} .PHONY
 	go test ${gopkg}
